@@ -1,107 +1,49 @@
 # GenAI-Enhanced Advanced Data Structures
 
-**Module:** COMP47500 — Advanced Data Structures in Java (2025/26 Spring)
-**Data Structure:** Segment Tree (with lazy propagation)
-**Scenario:** Daily retail sales analytics
+**Module:** COMP47500 — Advanced Data Structures in Java (2025/26 Spring)  
+**Data Structure:** Segment Tree (with lazy propagation)  
+**Scenario:** Daily retail sales analytics  
 **Author:** Jiawei Li (25212461)
-**Word target:** ~1,000–1,200 words (excluding AI declaration)
-
-> **How to use this scaffold.** Each section has a target length and a short
-> set of prompts inside *italics*. Do not leave the italic prompts in the
-> final submission — answer them in your own words, then delete.
-> Treat all text below as a starting skeleton you must rewrite in your own
-> voice. The grader is explicitly looking for evidence that you did not
-> submit AI prose.
 
 ---
 
-## A. Data Structure Design (≈ 300 words)
+## A. Data Structure Design
 
-*Answer in this section:*
+I chose a Segment Tree because the retail sales analytics scenario is fundamentally about range queries over a mutable sequence. A retail chain records daily revenue across a fixed window and the analytics engine must answer questions like "what was total revenue in Q1?" while supporting single-day corrections and bulk adjustments such as a supplier rebate backdated across a month. These map directly to the Segment Tree's primitives: `rangeSum`, `pointUpdate`, and `rangeAdd`.
 
-- *Why did you choose a Segment Tree over the other options (AVL, Red-Black,
-  Hash, Fibonacci Heap, etc.)? Tie this back to the retail analytics scenario:
-  range-sum queries + point updates + bulk adjustments map naturally to a
-  segment tree.*
-- *What key design decisions did you make?* Examples you can cite:
-  - Array-backed layout with 1-indexed nodes; size 4n to sidestep non-power-of-two edge cases.
-  - Lazy propagation with the convention `tree[node]` always current,
-    `lazy[node]` pending for children (contrast with the alternative
-    convention and explain why yours is cleaner for queries).
-  - Using `long` cents instead of `double` euros to avoid floating-point drift.
-  - Separating `SegmentTree` (data structure) from `SalesAnalytics` (domain
-    wrapper) — so the data structure is reusable.
-  - `(start + end) >>> 1` vs `(start + end) / 2` to avoid the Bentley-style
-    overflow bug.
-- *What trade-offs did you make?*
-  - Rejected a generic `SegmentTree<T, BinaryOperator<T>>`: more flexible
-    but adds boilerplate and obscures the core algorithm. Assignment rewards
-    clarity.
-  - Rejected a Fenwick / BIT: simpler code but does not support range
-    updates in O(log n) without two BITs, and the implementation nuance is
-    less pedagogically rich.
+The key design decision was to include **lazy propagation**. Without it, a range update costs O((r − l) · log n) by touching every affected leaf. Lazy propagation lets a fully-contained ancestor record a pending delta in a parallel `lazy[]` array, pushing it down only when a later operation descends through that node. This brings both `rangeAdd` and `rangeSum` to O(log n). My benchmark confirms it: at n = 100,000 the segment tree is over 17× faster than the naive baseline.
+
+I adopted the convention that `tree[node]` is always the current aggregate while `lazy[node]` stores pending deltas for children only. The alternative — stale `tree[node]` until lazy is applied — complicates every query path unnecessarily. The tree uses a 1-indexed array of size 4n, sidestepping non-power-of-two edge cases, and midpoints are computed with `(start + end) >>> 1` to prevent the classic signed-overflow bug.
+
+Structurally, I separated `SegmentTree` (a plain integer-indexed data structure) from `SalesAnalytics` (a thin domain facade translating dates and monetary amounts into indices). This keeps the core algorithm reusable. Monetary values are stored as `long` cents rather than `double` euros, eliminating floating-point drift and keeping the differential test deterministic. The constructor rejects empty input explicitly, since no public method is meaningful on an empty tree.
+
+I rejected two alternatives: a generic `SegmentTree<T, BinaryOperator<T>>` (adds boilerplate without benefit) and a Fenwick Tree (does not natively support O(log n) range updates without pairing two BITs).
 
 ---
 
-## B. Use of Generative AI (≈ 400 words)
+## B. Use of Generative AI
 
-*Answer in this section:*
+I used three GenAI tools, each in a distinct role. All interactions are documented in `genai_log.md`.
 
-- *Which GenAI tools did you use, in what order, and why those three?*
-  Mention at least three distinct tools. Typical split: one conversational
-  model for design discussion (ChatGPT / Claude), one IDE-embedded
-  tool for completions (GitHub Copilot / Tabnine), one second-opinion
-  tool for code review (Gemini / a second LLM / SpellBox).
-- *How did each tool support your work across the four permitted use cases
-  (design exploration, code generation, debugging, optimisation)?* Link
-  each claim to a concrete entry in `genai_log.md`.
-- *What worked well?* Examples:
-  - Rapidly bouncing design trade-offs (lazy-propagation convention,
-    generic vs. monomorphic) off a conversational model.
-  - Copilot autocomplete was very effective for boilerplate like the
-    `assertEquals` / `assertThrows` helpers.
-- *What did not work well?* Examples (make these real — the marker will
-  spot generic platitudes):
-  - A tool initially produced a `push()` method that applied the lazy
-    value to `tree[node]` *again* — a subtle double-counting bug that my
-    randomised differential test caught immediately. This is a strong
-    argument for why tests remain essential even with AI assistance.
-  - When asked for "the best way to benchmark", one tool suggested pulling
-    in JMH. For a 10% undergraduate assignment, that is overkill and would
-    have complicated the submission. I kept a hand-rolled benchmark with a
-    warm-up and a JIT-defeating "blackhole" pattern instead.
-  - A tool suggested storing monetary values as `double`. I overruled this
-    and used `long` cents; floating-point drift would have made the
-    differential test flaky.
-- *Where was human judgement essential?* Examples: the choice of scenario,
-  the boundary between data structure and domain wrapper, deciding what
-  *not* to add, and designing the test strategy itself.
+**ChatGPT (GPT-5.4)** was my starting point for understanding and planning. I fed it the brief and asked for a concise deliverables checklist, which helped me break the assignment into manageable steps. I then asked it to suggest real-world scenarios where a Segment Tree would be a natural fit; it proposed retail sales analytics, sensor monitoring, and game leaderboards. I chose retail sales because the operation mix — range-sum queries, single-day corrections, bulk adjustments — maps directly onto the tree's API. Later in the project, ChatGPT also suggested optimisations: the unsigned-shift midpoint to avoid overflow, and `long` cents instead of `double` euros to keep the differential test deterministic. I accepted both, though the cents-representation idea was something I had already been leaning towards.
+
+**Claude (Opus 4.6)** was my primary coding partner. I used it to produce initial drafts of `SegmentTree.java`, `SalesAnalytics.java`, the test harness, and the benchmark. It also served as an algorithm explainer: when I was unsure about the `push()` invariant, I asked it to walk through a concrete example of lazy propagation across a partially overlapping query, which made the convention click for me. On the debugging side, an earlier draft of `push()` double-counted the delta by applying it to `tree[node]` a second time before pushing to children — a subtle bug. My randomised differential test (5,000 operations cross-checked against a naive baseline) caught it immediately; I brought the failing output back to Claude, which helped trace the root cause and produce a correct rewrite. This was the single most instructive interaction of the project: it showed that AI-generated code can be plausible-looking yet subtly wrong, and that automated tests are the essential safety net.
+
+**Google Gemini** served as a second-opinion reviewer. It confirmed the lazy logic was sound but suggested switching to a *minimum*-tree — a misread of my prompt, since the domain is additive. I rejected it outright. It also recommended JMH for benchmarking, which I declined as overkill; I kept a hand-rolled benchmark with a warm-up pass and a JIT-defeating blackhole pattern instead.
+
+What worked well: ChatGPT turned a vague brief into a concrete plan; Claude was precise and productive for code generation and debugging. What did not: the "confidently wrong" `push()` bug is genuinely dangerous for code with subtle invariants, and the tendency to over-engineer (generic types, JMH, Maven) required restraint. Human judgement was essential for the scenario choice, the data-structure / domain-wrapper boundary, the test strategy, and the cents-not-doubles decision — none suggested unprompted by any tool.
 
 ---
 
-## C. Critical Reflection (≈ 300 words)
+## C. Critical Reflection
 
-*Answer in this section:*
+GenAI genuinely improved my understanding of lazy propagation. Before this project I knew the concept abstractly but had not implemented `push()` from scratch. Claude's worked example clarified why `tree[node]` must already reflect the lazy delta while `lazy[node]` is pending for children, and ChatGPT's checklist approach helped me see the assignment as concrete deliverables rather than one monolithic task. That said, I only trusted my understanding after re-deriving the push logic by hand and validating it against 5,000 random operations. The AI gave me a starting point; the tests gave me confidence.
 
-- *Did GenAI improve your understanding?* Be honest. If the answer is
-  "yes, for the high-level intuition around lazy propagation, but I still
-  had to re-derive the `push()` logic by hand to trust it", say so.
-- *Did it introduce risks or misconceptions?* Concrete examples:
-  - The "confidently wrong" failure mode — a plausible-looking `push()`
-    that was subtly incorrect. My differential test caught it; a hand-only
-    code review probably would not have.
-  - Tendency to over-engineer (generic types, JMH, feature creep).
-  - Potential attribution drift — it is easy to accept an AI suggestion
-    verbatim and forget it was AI-authored. The running `genai_log.md`
-    helped prevent this.
-- *How would you use (or limit) GenAI in future software engineering?*
-  Draw a principled line. Examples:
-  - Use for: scaffolding, boilerplate, explanation of unfamiliar idioms,
-    second-opinion code review, refactoring suggestions.
-  - Do not use without strong tests when the code involves subtle
-    invariants (lazy propagation, lock-free concurrency, numerical stability).
-  - Always keep the tests that verify AI-authored code, not just the code
-    itself.
+The clearest risk was the "confidently wrong" failure mode. The buggy `push()` looked entirely plausible — clean code, good naming, correct structure — but it double-counted the delta. Without a randomised differential test I might never have caught it by inspection alone. This is not a hypothetical concern: lazy propagation is exactly the kind of subtle invariant where a small mistake produces outputs that look reasonable on small inputs but diverge at scale. My test harness (1,897 assertions, 0 failures) was the single most important quality gate in the project.
+
+A second risk was over-engineering. AI tools consistently suggested adding complexity — generic types, JMH, Maven — that would have increased submission friction without improving the deliverable. Learning to say "no" to a plausible suggestion requires understanding the context of the task, which AI does not provide.
+
+Going forward I would continue using GenAI for scaffolding, explanation, and code review, but never trust it without strong automated tests for code involving subtle invariants — lazy propagation, lock-free concurrency, numerical stability. The running `genai_log.md` also proved valuable for attribution hygiene: it is easy to accept an AI suggestion verbatim and forget it was AI-authored, and the log helped me stay honest about what was mine and what was not.
 
 ---
 
@@ -109,15 +51,10 @@
 
 I used the following Generative AI tools while completing this assignment:
 
-- **[Tool 1]** — used for [design / code / debugging / ...]. Representative
-  prompts and decisions are documented in `report/genai_log.md`.
-- **[Tool 2]** — used for [...].
-- **[Tool 3]** — used for [...].
+- **ChatGPT (GPT-5.4)** — used for understanding the assignment brief, planning a task checklist, generating real-world scenario ideas for the Segment Tree, and suggesting optimisations. Representative prompts and decisions are documented in `genai_log.md`.
+- **Claude (Opus 4.6)** — used for producing draft code snippets, explaining algorithms (especially lazy propagation mechanics), and identifying bugs and performance issues.
+- **Google Gemini** — used for suggesting optimisations and as a second-opinion code reviewer for the lazy propagation logic.
 
-All final design decisions, algorithmic reasoning, test strategy, and report
-prose are my own. Where I have reused or adapted AI-produced code, I have
-reviewed and modified it and kept a record of the changes in
-`report/genai_log.md`. I accept full responsibility for the correctness of
-the submitted code.
+All final design decisions, algorithmic reasoning, test strategy, and report prose are my own. Where I have reused or adapted AI-produced code, I have reviewed and modified it and kept a record of the changes in `genai_log.md`. I accept full responsibility for the correctness of the submitted code.
 
-Signed: _________________________   Date: ______________
+Signed: Jiawei Li    Date: 17 April 2026
