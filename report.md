@@ -9,7 +9,7 @@
 
 ## A. Data Structure Design
 
-I chose a Segment Tree because the retail sales analytics scenario is fundamentally about range queries over a mutable sequence. A retail chain records daily revenue across a fixed window and the analytics engine must answer questions like "what was total revenue in Q1?" while supporting single-day corrections and bulk adjustments such as a supplier rebate backdated across a month. These map directly to the Segment Tree's primitives: `rangeSum`, `pointUpdate`, and `rangeAdd`.
+I chose a Segment Tree because I wanted to learn a data structure I had not implemented before, and lazy propagation in particular struck me as a technique worth understanding properly. Once the data structure was chosen, I looked for a scenario that would exercise all of its operations naturally. Retail sales analytics was a strong fit: a chain records daily revenue across a fixed window, and the analytics engine needs range-sum queries for revenue reports, point updates for POS corrections, and range-add for bulk adjustments such as a supplier rebate backdated across a month. These map directly to `rangeSum`, `pointUpdate`, and `rangeAdd`.
 
 The key design decision was to include **lazy propagation**. Without it, a range update costs O((r − l) · log n) by touching every affected leaf. Lazy propagation lets a fully-contained ancestor record a pending delta in a parallel `lazy[]` array, pushing it down only when a later operation descends through that node. This brings both `rangeAdd` and `rangeSum` to O(log n). My benchmark confirms it: at n = 100,000 the segment tree is over 17× faster than the naive baseline.
 
